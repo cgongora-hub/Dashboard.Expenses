@@ -54,6 +54,7 @@ if col_proyecto:
 
 # Filtro Año
 col_ano = "PeriodoAno" if "PeriodoAno" in df.columns else None
+anio_sel = None
 if col_ano:
   anios = sorted(df[col_ano].dropna().unique(), reverse=True)
   anio_sel = st.sidebar.selectbox("Año:", anios)
@@ -73,9 +74,10 @@ if col_mes:
 index_cols = [c for c in ["DesPCG2", "DesPCG3", "DesPCG"] if c in df.columns]
 
 
-def obtener_nombre_mes(val):
+def obtener_nombre_mes(val, anio_actual):
   if str(val) == "Total General":
     return "TOTAL GENERAL"
+
   meses_map = {
       1: "Ene",
       2: "Feb",
@@ -90,11 +92,21 @@ def obtener_nombre_mes(val):
       11: "Nov",
       12: "Dic",
   }
+
+  # Obtener sufijo de año de 2 dígitos (ejemplo: 2026 -> "-26")
+  sufijo_ano = ""
+  if anio_actual:
+    try:
+      sufijo_ano = f"-{str(int(float(str(anio_actual))))[-2:]}"
+    except (ValueError, TypeError):
+      sufijo_ano = f"-{str(anio_actual)[-2:]}"
+
   try:
     num = int(float(str(val).strip()))
-    return meses_map.get(num, str(val))
+    mes_nombre = meses_map.get(num, str(val))
+    return f"{mes_nombre}{sufijo_ano}"
   except (ValueError, TypeError):
-    return str(val)
+    return f"{str(val)}{sufijo_ano}"
 
 
 if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
@@ -132,7 +144,7 @@ else:
   columnas_meses_raw = []
   num_cols = ["MontoS"] if "MontoS" in df.columns else []
 
-# Normalizar los nombres de columnas a texto para asegurar compatibilidad con AgGrid
+# Normalizar los nombres de columnas a texto
 df_display.columns = [str(c) for c in df_display.columns]
 num_cols_str = [str(c) for c in num_cols]
 index_cols_str = [str(c) for c in index_cols]
@@ -142,57 +154,4 @@ index_cols_str = [str(c) for c in index_cols]
 # ---------------------------------------------------------
 gb = GridOptionsBuilder.from_dataframe(df_display)
 
-# Ocultar e integrar los 3 niveles jerárquicos dentro del mismo árbol
-if "DesPCG2" in df_display.columns:
-  gb.configure_column("DesPCG2", rowGroup=True, hide=True)
-if "DesPCG3" in df_display.columns:
-  gb.configure_column("DesPCG3", rowGroup=True, hide=True)
-if "DesPCG" in df_display.columns:
-  gb.configure_column("DesPCG", rowGroup=True, hide=True)
-
-# Formato numérico con separador de miles y 2 decimales
-js_formatter = JsCode("""
-function(params) {
-    if (params.value === undefined || params.value === null) return '0.00';
-    return params.value.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-""")
-
-# Asignar cabeceras traducidas (Ene, Feb, Mar...)
-for col_str in num_cols_str:
-  nombre_cabecera = obtener_nombre_mes(col_str)
-
-  gb.configure_column(
-      col_str,
-      headerName=nombre_cabecera,
-      aggFunc="sum",
-      type=["numericColumn", "numberColumnFilter"],
-      valueFormatter=js_formatter,
-      minWidth=110,
-  )
-
-for col in df_display.columns:
-  if col not in index_cols_str and col not in num_cols_str:
-    gb.configure_column(col, hide=True)
-
-# Opciones finales de AgGrid
-gb.configure_grid_options(
-    autoGroupColumnDef={
-        "headerName": "Grupo / Subpartida / Detalle",
-        "cellRendererParams": {"suppressCount": False},
-        "minWidth": 420,
-    },
-    groupDefaultExpanded=0,
-    suppressAggFuncInHeader=True,
-)
-
-grid_options = gb.build()
-
-AgGrid(
-    df_display,
-    gridOptions=grid_options,
-    enable_enterprise_modules=True,
-    allow_unsafe_jscode=True,
-    height=550,
-    theme="balham",
-)
+# Ocultar e integrar los 3 niveles jerárquicos dentro del mismo
