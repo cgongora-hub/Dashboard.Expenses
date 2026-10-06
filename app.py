@@ -72,42 +72,30 @@ if col_mes:
 # ---------------------------------------------------------
 index_cols = [c for c in ["DesPCG2", "DesPCG3", "DesPCG"] if c in df.columns]
 
-# Diccionario para mapear números de mes a nombres legibles
-NOMBRES_MESES = {
-    1: "Ene",
-    2: "Feb",
-    3: "Mar",
-    4: "Abr",
-    5: "May",
-    6: "Jun",
-    7: "Jul",
-    8: "Ago",
-    9: "Sep",
-    10: "Oct",
-    11: "Nov",
-    12: "Dic",
-    "1": "Ene",
-    "2": "Feb",
-    "3": "Mar",
-    "4": "Abr",
-    "5": "May",
-    "6": "Jun",
-    "7": "Jul",
-    "8": "Ago",
-    "9": "Sep",
-    "10": "Oct",
-    "11": "Nov",
-    "12": "Dic",
-    "01": "Ene",
-    "02": "Feb",
-    "03": "Mar",
-    "04": "Abr",
-    "05": "May",
-    "06": "Jun",
-    "07": "Jul",
-    "08": "Ago",
-    "09": "Sep",
-}
+
+def obtener_nombre_mes(val):
+  if str(val) == "Total General":
+    return "TOTAL GENERAL"
+  meses_map = {
+      1: "Ene",
+      2: "Feb",
+      3: "Mar",
+      4: "Abr",
+      5: "May",
+      6: "Jun",
+      7: "Jul",
+      8: "Ago",
+      9: "Sep",
+      10: "Oct",
+      11: "Nov",
+      12: "Dic",
+  }
+  try:
+    num = int(float(str(val).strip()))
+    return meses_map.get(num, str(val))
+  except (ValueError, TypeError):
+    return str(val)
+
 
 if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
   df_pivot = pd.pivot_table(
@@ -124,7 +112,9 @@ if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
   columnas_meses_raw = [c for c in df_pivot.columns if c not in index_cols]
 
   try:
-    columnas_meses_raw = sorted(columnas_meses_raw, key=lambda x: int(x))
+    columnas_meses_raw = sorted(
+        columnas_meses_raw, key=lambda x: int(float(str(x)))
+    )
   except ValueError:
     columnas_meses_raw = sorted(columnas_meses_raw)
 
@@ -141,6 +131,11 @@ else:
   df_display = df.copy()
   columnas_meses_raw = []
   num_cols = ["MontoS"] if "MontoS" in df.columns else []
+
+# Normalizar los nombres de columnas a texto para asegurar compatibilidad con AgGrid
+df_display.columns = [str(c) for c in df_display.columns]
+num_cols_str = [str(c) for c in num_cols]
+index_cols_str = [str(c) for c in index_cols]
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN DE AGGRID (TREE GRID EN 3 NIVELES)
@@ -163,15 +158,12 @@ function(params) {
 }
 """)
 
-# Asignar cabeceras legibles a las columnas de meses y Total General
-for col in num_cols:
-  if col == "Total General":
-    nombre_cabecera = "TOTAL GENERAL"
-  else:
-    nombre_cabecera = NOMBRES_MESES.get(col, f"Mes {col}")
+# Asignar cabeceras traducidas (Ene, Feb, Mar...)
+for col_str in num_cols_str:
+  nombre_cabecera = obtener_nombre_mes(col_str)
 
   gb.configure_column(
-      str(col),
+      col_str,
       headerName=nombre_cabecera,
       aggFunc="sum",
       type=["numericColumn", "numberColumnFilter"],
@@ -180,10 +172,10 @@ for col in num_cols:
   )
 
 for col in df_display.columns:
-  if col not in index_cols and col not in num_cols:
+  if col not in index_cols_str and col not in num_cols_str:
     gb.configure_column(col, hide=True)
 
-# Desactivar 'sum()' de los títulos de columna
+# Opciones finales de AgGrid
 gb.configure_grid_options(
     autoGroupColumnDef={
         "headerName": "Grupo / Subpartida / Detalle",
