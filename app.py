@@ -10,12 +10,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
 # --- BLOQUE CSS ACTUALIZADO CON LA FUENTE INTER ---
-st.markdown(
-    '<div style="font-size:38px;font-weight:700;color:#595959;">'
-    '<span style="color:#ffcc00;">▮▮</span><span style="color:#595959;">▮</span>'
-    '&nbsp;&nbsp;Flujo de caja</div>',
-    unsafe_allow_html=True
-)
+st.markdown('<div style="font-size:38px;font-weight:700;color:#595959;"><span style="color:#ffcc00;">▮▮</span><span style="color:#595959;">▮</span>&nbsp;&nbsp;Flujo de caja</div>', unsafe_allow_html=True)
 # -----------------------------------------
 
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
