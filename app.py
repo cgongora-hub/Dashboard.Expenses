@@ -9,6 +9,18 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
+# Ocultar la marca de agua de AG Grid Enterprise
+st.markdown(
+    """
+    <style>
+    div[ref="eWatermark"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 COLUMNAS_NECESARIAS = [
