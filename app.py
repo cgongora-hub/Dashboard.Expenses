@@ -70,12 +70,46 @@ if col_mes:
 # ---------------------------------------------------------
 # CONSTRUCCIÓN DE LA TABLA DINÁMICA (MESES EN COLUMNAS)
 # ---------------------------------------------------------
-index_cols = [
-    c for c in ["DesPCG2", "DesPCG3", "DesPCG"] if c in df.columns
-]
+index_cols = [c for c in ["DesPCG2", "DesPCG3", "DesPCG"] if c in df.columns]
+
+# Diccionario para mapear números de mes a nombres legibles
+NOMBRES_MESES = {
+    1: "Ene",
+    2: "Feb",
+    3: "Mar",
+    4: "Abr",
+    5: "May",
+    6: "Jun",
+    7: "Jul",
+    8: "Ago",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dic",
+    "1": "Ene",
+    "2": "Feb",
+    "3": "Mar",
+    "4": "Abr",
+    "5": "May",
+    "6": "Jun",
+    "7": "Jul",
+    "8": "Ago",
+    "9": "Sep",
+    "10": "Oct",
+    "11": "Nov",
+    "12": "Dic",
+    "01": "Ene",
+    "02": "Feb",
+    "03": "Mar",
+    "04": "Abr",
+    "05": "May",
+    "06": "Jun",
+    "07": "Jul",
+    "08": "Ago",
+    "09": "Sep",
+}
 
 if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
-  # Crear Tabla Dinámica: Filas = Partidas, Columnas = Meses, Valores = Suma de MontoS
   df_pivot = pd.pivot_table(
       df,
       index=index_cols,
@@ -87,43 +121,41 @@ if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
 
   df_pivot.columns.name = None
 
-  # Identificar las columnas correspondientes a los meses
-  columnas_meses = [c for c in df_pivot.columns if c not in index_cols]
+  columnas_meses_raw = [c for c in df_pivot.columns if c not in index_cols]
 
-  # Ordenar las columnas de meses numéricamente
   try:
-    columnas_meses = sorted(columnas_meses, key=lambda x: int(x))
+    columnas_meses_raw = sorted(columnas_meses_raw, key=lambda x: int(x))
   except ValueError:
-    columnas_meses = sorted(columnas_meses)
+    columnas_meses_raw = sorted(columnas_meses_raw)
 
-  # Columna de Total General acumulado
-  df_pivot["Total General"] = df_pivot[columnas_meses].sum(axis=1)
+  # Columna con la suma del Total General
+  df_pivot["Total General"] = df_pivot[columnas_meses_raw].sum(axis=1)
 
-  columnas_finales = index_cols + columnas_meses + ["Total General"]
+  columnas_finales = index_cols + columnas_meses_raw + ["Total General"]
   df_display = df_pivot[columnas_finales]
 
-  num_cols = columnas_meses + ["Total General"]
+  num_cols = columnas_meses_raw + ["Total General"]
   df_display[num_cols] = df_display[num_cols].round(2)
 
 else:
   df_display = df.copy()
-  columnas_meses = []
+  columnas_meses_raw = []
   num_cols = ["MontoS"] if "MontoS" in df.columns else []
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN DE AGGRID (TREE GRID + FORMATO MONEDA)
+# CONFIGURACIÓN DE AGGRID (TREE GRID EN 3 NIVELES)
 # ---------------------------------------------------------
 gb = GridOptionsBuilder.from_dataframe(df_display)
 
-# Niveles del árbol
+# Ocultar e integrar los 3 niveles jerárquicos dentro del mismo árbol
 if "DesPCG2" in df_display.columns:
   gb.configure_column("DesPCG2", rowGroup=True, hide=True)
 if "DesPCG3" in df_display.columns:
   gb.configure_column("DesPCG3", rowGroup=True, hide=True)
 if "DesPCG" in df_display.columns:
-  gb.configure_column("DesPCG", headerName="Detalle Final", minWidth=250)
+  gb.configure_column("DesPCG", rowGroup=True, hide=True)
 
-# Formateador JavaScript para números (Separador de miles y 2 decimales)
+# Formato numérico con separador de miles y 2 decimales
 js_formatter = JsCode("""
 function(params) {
     if (params.value === undefined || params.value === null) return '0.00';
@@ -131,36 +163,35 @@ function(params) {
 }
 """)
 
-# Configurar columnas de meses y Total con suma y formato numérico
+# Asignar cabeceras legibles a las columnas de meses y Total General
 for col in num_cols:
-  header_title = (
-      f"Mes {col}"
-      if isinstance(col, (int, float)) or str(col).isdigit()
-      else str(col)
-  )
   if col == "Total General":
-    header_title = "TOTAL GENERAL"
+    nombre_cabecera = "TOTAL GENERAL"
+  else:
+    nombre_cabecera = NOMBRES_MESES.get(col, f"Mes {col}")
 
   gb.configure_column(
       str(col),
-      headerName=header_title,
+      headerName=nombre_cabecera,
       aggFunc="sum",
       type=["numericColumn", "numberColumnFilter"],
       valueFormatter=js_formatter,
-      minWidth=120,
+      minWidth=110,
   )
 
 for col in df_display.columns:
   if col not in index_cols and col not in num_cols:
     gb.configure_column(col, hide=True)
 
+# Desactivar 'sum()' de los títulos de columna
 gb.configure_grid_options(
     autoGroupColumnDef={
         "headerName": "Grupo / Subpartida / Detalle",
         "cellRendererParams": {"suppressCount": False},
-        "minWidth": 380,
+        "minWidth": 420,
     },
     groupDefaultExpanded=0,
+    suppressAggFuncInHeader=True,
 )
 
 grid_options = gb.build()
