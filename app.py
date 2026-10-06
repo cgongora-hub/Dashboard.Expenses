@@ -9,18 +9,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
-# Ocultar la marca de agua de AG Grid Enterprise
-st.markdown(
-    """
-    <style>
-    div[ref="eWatermark"] {
-        display: none !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 COLUMNAS_NECESARIAS = [
@@ -256,6 +244,11 @@ gb.configure_grid_options(
 
 grid_options = gb.build()
 
+# CSS interno inyectado directamente a la tabla para ocultar la marca de agua
+css_ocultar_marca = {
+    ".ag-watermark": {"display": "none !important", "opacity": "0 !important"}
+}
+
 AgGrid(
     df_display,
     gridOptions=grid_options,
@@ -263,4 +256,5 @@ AgGrid(
     allow_unsafe_jscode=True,
     height=550,
     theme="balham",
+    custom_css=css_ocultar_marca,  # <-- Esto aplica el CSS dentro del marco
 )
