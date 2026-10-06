@@ -68,12 +68,10 @@ if "PeriodoMensual" in df.columns:
 # 3. Configuración de la tabla con estructura de Árbol (Tree Grid)
 gb = GridOptionsBuilder.from_dataframe(df)
 
-# Niveles de agrupación jerárquica: DesPCG2 -> DesPCG3 -> DesPCG
 gb.configure_column("DesPCG2", rowGroup=True, hide=True)
 gb.configure_column("DesPCG3", rowGroup=True, hide=True)
 gb.configure_column("DesPCG", headerName="Detalle Final")
 
-# Suma monetaria
 gb.configure_column(
     "MontoS",
     headerName="Monto (S/)",
@@ -82,20 +80,18 @@ gb.configure_column(
     precision=2,
 )
 
-# Ocultar el resto de las columnas para evitar saturar la pantalla
 columnas_visibles = ["DesPCG2", "DesPCG3", "DesPCG", "MontoS"]
 for col in df.columns:
   if col not in columnas_visibles:
     gb.configure_column(col, hide=True)
 
-# Configuración del árbol desplegable en una sola columna
 gb.configure_grid_options(
     autoGroupColumnDef={
         "headerName": "Grupo / Subpartida / Detalle",
         "cellRendererParams": {"suppressCount": False},
         "minWidth": 400,
     },
-    groupDefaultExpanded=0,  # Todo colapsado por defecto
+    groupDefaultExpanded=0,
 )
 
 grid_options = gb.build()
@@ -105,3 +101,6 @@ AgGrid(
     df,
     gridOptions=grid_options,
     enable_enterprise_modules=True,
+    height=550,
+    theme="balham",
+)
