@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
 # ATENCIÓN: Pega AQUÍ solo el código alfanumérico, sin diagonales ni "https"
-id_archivo = 1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r
+id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 
 @st.cache_data(ttl=300)
