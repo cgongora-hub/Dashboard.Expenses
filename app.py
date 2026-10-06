@@ -16,7 +16,8 @@ def cargar_datos():
   archivo_temporal = "gastos_erp.xlsx"
   gdown.download(url_drive, archivo_temporal, quiet=True)
 
-  df = pd.read_excel(archivo_temporal)
+  # Especificamos sheet_name="Data" para que lea la pestaña correcta del ERP
+  df = pd.read_excel(archivo_temporal, sheet_name="Data")
 
   # Limpiar espacios invisibles en los nombres de las columnas
   df.columns = df.columns.astype(str).str.strip()
@@ -26,16 +27,14 @@ def cargar_datos():
 try:
   df_raw = cargar_datos()
 except Exception as e:
-  st.error(f"Error al descargar los datos: {e}")
+  st.error(f"Error al descargar o leer la pestaña 'Data': {e}")
   st.stop()
 
 st.title("📊 Control de Gastos por Proyecto")
 
-# Panel de diagnóstico desplegable
-with st.expander("🔍 DIAGNÓSTICO: Haz clic aquí si las columnas no coinciden"):
-  st.write("**Columnas detectadas por Python:**", list(df_raw.columns))
-  st.write("**Vista previa de los datos:**")
-  st.dataframe(df_raw.head(3))
+# Panel de diagnóstico
+with st.expander("🔍 DIAGNÓSTICO DE COLUMNAS"):
+  st.write("**Columnas detectadas en la pestaña 'Data':**", list(df_raw.columns))
 
 df = df_raw.copy()
 
@@ -75,7 +74,7 @@ if col_mes:
   if mes_sel != "Todos":
     df = df[df[col_mes] == mes_sel]
 
-# Agrupación y Árbol
+# Agrupación y Árbol (Tree Grid)
 gb = GridOptionsBuilder.from_dataframe(df)
 
 if "DesPCG2" in df.columns:
