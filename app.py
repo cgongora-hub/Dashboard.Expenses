@@ -169,12 +169,16 @@ if col_ano:
         reverse=True
     )
 
+    opciones_ano = ["Todos"] + anios
+
     anio_sel = st.sidebar.selectbox(
         "Año:",
-        anios
+        opciones_ano,
+        index=1 if anios else 0,   # por defecto, el año más reciente
     )
 
-    df = df[df[col_ano] == anio_sel]
+    if anio_sel != "Todos":
+        df = df[df[col_ano] == anio_sel]
 
 
 # =========================================================
