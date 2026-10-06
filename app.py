@@ -86,7 +86,48 @@ except Exception as e:
     st.error(f"Error al procesar los datos: {e}")
     st.stop()
 
-st.title("📊 Control de Gastos por Proyecto")
+st.markdown("""
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:20px;">
+    <div style="
+        display:flex;
+        align-items:flex-end;
+        gap:4px;
+        height:42px;
+    ">
+        <span style="
+            display:block;
+            width:9px;
+            height:21px;
+            background:#ffcc00;
+            border-radius:2px 2px 0 0;
+        "></span>
+        <span style="
+            display:block;
+            width:9px;
+            height:32px;
+            background:#ffcc00;
+            border-radius:2px 2px 0 0;
+        "></span>
+        <span style="
+            display:block;
+            width:9px;
+            height:42px;
+            background:#595959;
+            border-radius:2px 2px 0 0;
+        "></span>
+    </div>
+
+    <h1 style="
+        margin:0;
+        padding:0;
+        color:#595959;
+        font-size:38px;
+        font-weight:700;
+    ">
+        Flujo de caja
+    </h1>
+</div>
+""", unsafe_allow_html=True)
 
 df = df_raw.copy()
 
