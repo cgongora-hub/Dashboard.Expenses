@@ -94,11 +94,16 @@ except Exception as e:
 # =========================================================
 
 st.markdown(
-    '<div style="font-size:38px;font-weight:700;color:#595959;">'
-    '<span style="color:#ffcc00;">▮▮</span>'
-    '<span style="color:#595959;">▮</span>'
-    '&nbsp;&nbsp;Flujo de caja'
-    '</div>',
+    '''
+    <div style="display:flex;align-items:center;gap:14px;">
+        <svg width="40" height="40" viewBox="0 0 40 40">
+            <rect x="2"  y="24" width="9" height="14" rx="1.5" fill="#ffcc00"/>
+            <rect x="15" y="14" width="9" height="24" rx="1.5" fill="#ffcc00"/>
+            <rect x="28" y="4"  width="9" height="34" rx="1.5" fill="#595959"/>
+        </svg>
+        <span style="font-size:38px;font-weight:700;color:#595959;">Flujo de caja</span>
+    </div>
+    ''',
     unsafe_allow_html=True
 )
 
