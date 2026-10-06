@@ -5,7 +5,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
 # Reemplaza 'TU_ID_AQUI' con el ID del enlace público de tu Excel en Google Drive
-url_drive = "https://drive.google.com/uc?export=download&id=TU_ID_AQUI"
+url_drive = "https://drive.google.com/uc?export=download&id=1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 @st.cache_data(ttl=600)
 def cargar_datos():
