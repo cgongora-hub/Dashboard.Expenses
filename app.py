@@ -239,40 +239,28 @@ def obtener_nombre_mes(val, anio_actual):
     if val_str.upper() in ["TOTAL GENERAL", "TOTAL"]:
         return "TOTAL GENERAL"
 
-    sufijo_ano = ""
+    # Año: primero se busca dentro del propio valor (modo "Todos");
+    # si no hay, se usa el año seleccionado en el filtro
+    m_anio = re.search(r"(20\d{2})", val_str)
 
-    if anio_actual:
+    if m_anio:
+        s_anio = m_anio.group(1)
+    else:
+        s_anio = re.sub(r"\D", "", str(anio_actual))
 
-        s_anio = re.sub(
-            r"\D",
-            "",
-            str(anio_actual)
-        )
-
-        if len(s_anio) >= 2:
-            sufijo_ano = f"-{s_anio[-2:]}"
+    sufijo_ano = f"-{s_anio[-2:]}" if len(s_anio) >= 2 else ""
 
     for num, abrev in MESES_MAP.items():
-
         if abrev.lower() in val_str.lower():
             return f"{abrev}{sufijo_ano}"
 
-    numeros = re.findall(
-        r"\d+",
-        val_str
-    )
+    numeros = re.findall(r"\d+", val_str)
 
     if numeros:
-
         for n in reversed(numeros):
-
             num_int = int(n)
-
             if 1 <= num_int <= 12:
-                return (
-                    f"{MESES_MAP[num_int]}"
-                    f"{sufijo_ano}"
-                )
+                return f"{MESES_MAP[num_int]}{sufijo_ano}"
 
     return f"{val_str}{sufijo_ano}"
 
@@ -281,26 +269,25 @@ def obtener_orden_mes(val):
 
     val_str = str(val).strip()
 
+    mes = 99
+    encontrado = False
+
     for num, abrev in MESES_MAP.items():
-
         if abrev.lower() in val_str.lower():
-            return num
+            mes = num
+            encontrado = True
+            break
 
-    numeros = re.findall(
-        r"\d+",
-        val_str
-    )
+    if not encontrado:
+        for n in reversed(re.findall(r"\d+", val_str)):
+            if 1 <= int(n) <= 12:
+                mes = int(n)
+                break
 
-    if numeros:
+    m_anio = re.search(r"(20\d{2})", val_str)
+    anio = int(m_anio.group(1)) if m_anio else 0
 
-        for n in reversed(numeros):
-
-            num_int = int(n)
-
-            if 1 <= num_int <= 12:
-                return num_int
-
-    return 99
+    return anio * 100 + mes
 
 
 if (
