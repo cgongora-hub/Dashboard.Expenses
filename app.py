@@ -11,27 +11,10 @@ st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
 # --- BLOQUE CSS ACTUALIZADO CON LA FUENTE INTER ---
 st.markdown(
-    """
-    <style>
-    /* 1. Importar la fuente Inter desde Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-
-    /* 2. Aplicar Inter a toda la aplicación de Streamlit */
-    html, body, [class*="css"], [class*="st-"], p, span, h1, h2, h3, h4, h5, h6, div {
-        font-family: 'Inter', sans-serif !important;
-    }
-
-    /* 3. Forzar a la app a usar el 100% del ancho y quitar márgenes laterales */
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 0rem;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
-        max-width: 100% !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+    '<div style="font-size:38px;font-weight:700;color:#595959;">'
+    '<span style="color:#ffcc00;">▮▮</span><span style="color:#595959;">▮</span>'
+    '&nbsp;&nbsp;Flujo de caja</div>',
+    unsafe_allow_html=True
 )
 # -----------------------------------------
 
