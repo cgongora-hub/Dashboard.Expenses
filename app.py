@@ -9,6 +9,24 @@ from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
 
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
+# --- PEGAR ESTE BLOQUE EXACTAMENTE AQUÍ ---
+st.markdown(
+    """
+    <style>
+    /* Forzar a la app a usar el 100% del ancho y quitar márgenes laterales */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 100% !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+# -----------------------------------------
+
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 COLUMNAS_NECESARIAS = [
