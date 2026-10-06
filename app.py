@@ -1,6 +1,7 @@
 import gc
 import io
 import os
+import re
 import gdown
 import pandas as pd
 import streamlit as st
@@ -10,7 +11,6 @@ st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
-# Solo las 9 columnas indispensables para acelerar la carga y no saturar RAM
 COLUMNAS_NECESARIAS = [
     "PeriodoAno",
     "PeriodoMensual",
@@ -31,20 +31,17 @@ def cargar_datos():
 
   gdown.download(url_drive, archivo_temporal, quiet=True)
 
-  # Lectura optimizada: Carga estrictamente las columnas utilizadas
   df = pd.read_excel(
       archivo_temporal,
       sheet_name="Data",
       usecols=lambda col: str(col).strip() in COLUMNAS_NECESARIAS,
   )
 
-  # Eliminar el archivo físico temporal para liberar disco y RAM del servidor
   if os.path.exists(archivo_temporal):
     os.remove(archivo_temporal)
 
   df.columns = df.columns.astype(str).str.strip()
 
-  # Filtrar 'Cobrado' y 'Pagado' en memoria antes de guardar en caché
   if "EstadoCronograma" in df.columns:
     df = df[
         df["EstadoCronograma"].astype(str).str.strip().isin(["Cobrado", "Pagado"])
@@ -107,39 +104,61 @@ if col_mes:
 # ---------------------------------------------------------
 index_cols = [c for c in ["DesPCG2", "DesPCG3", "DesPCG"] if c in df.columns]
 
+MESES_MAP = {
+    1: "Ene",
+    2: "Feb",
+    3: "Mar",
+    4: "Abr",
+    5: "May",
+    6: "Jun",
+    7: "Jul",
+    8: "Ago",
+    9: "Sep",
+    10: "Oct",
+    11: "Nov",
+    12: "Dic",
+}
+
 
 def obtener_nombre_mes(val, anio_actual):
-  if str(val) == "Total General":
+  val_str = str(val).strip()
+  if val_str.upper() in ["TOTAL GENERAL", "TOTAL"]:
     return "TOTAL GENERAL"
-
-  meses_map = {
-      1: "Ene",
-      2: "Feb",
-      3: "Mar",
-      4: "Abr",
-      5: "May",
-      6: "Jun",
-      7: "Jul",
-      8: "Ago",
-      9: "Sep",
-      10: "Oct",
-      11: "Nov",
-      12: "Dic",
-  }
 
   sufijo_ano = ""
   if anio_actual:
-    try:
-      sufijo_ano = f"-{str(int(float(str(anio_actual))))[-2:]}"
-    except (ValueError, TypeError):
-      sufijo_ano = f"-{str(anio_actual)[-2:]}"
+    s_anio = re.sub(r"\D", "", str(anio_actual))
+    if len(s_anio) >= 2:
+      sufijo_ano = f"-{s_anio[-2:]}"
 
-  try:
-    num = int(float(str(val).strip()))
-    mes_nombre = meses_map.get(num, str(val))
-    return f"{mes_nombre}{sufijo_ano}"
-  except (ValueError, TypeError):
-    return f"{str(val)}{sufijo_ano}"
+  # 1. Buscar coincidencia por nombre de mes
+  for num, abrev in MESES_MAP.items():
+    if abrev.lower() in val_str.lower():
+      return f"{abrev}{sufijo_ano}"
+
+  # 2. Extraer el número del mes con regex (del 1 al 12)
+  numeros = re.findall(r"\d+", val_str)
+  if numeros:
+    for n in reversed(numeros):
+      num_int = int(n)
+      if 1 <= num_int <= 12:
+        return f"{MESES_MAP[num_int]}{sufijo_ano}"
+
+  return f"{val_str}{sufijo_ano}"
+
+
+def obtener_orden_mes(val):
+  val_str = str(val).strip()
+  for num, abrev in MESES_MAP.items():
+    if abrev.lower() in val_str.lower():
+      return num
+  numeros = re.findall(r"\d+", val_str)
+  if numeros:
+    for n in reversed(numeros):
+      num_int = int(n)
+      if 1 <= num_int <= 12:
+        return num_int
+  return 99
 
 
 if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
@@ -155,12 +174,8 @@ if index_cols and col_mes and "MontoS" in df.columns and not df.empty:
   df_pivot.columns.name = None
   columnas_meses_raw = [c for c in df_pivot.columns if c not in index_cols]
 
-  try:
-    columnas_meses_raw = sorted(
-        columnas_meses_raw, key=lambda x: int(float(str(x)))
-    )
-  except ValueError:
-    columnas_meses_raw = sorted(columnas_meses_raw)
+  # Ordenar cronológicamente del mes 1 al 12
+  columnas_meses_raw = sorted(columnas_meses_raw, key=obtener_orden_mes)
 
   df_pivot["Total General"] = df_pivot[columnas_meses_raw].sum(axis=1)
 
@@ -199,16 +214,17 @@ function(params) {
 
 for col_str in num_cols_str:
   nombre_cabecera = obtener_nombre_mes(col_str, anio_sel)
-  ancho_col = 160 if col_str == "Total General" else 135
+  ancho_col = 150 if col_str == "Total General" else 125
 
   gb.configure_column(
       col_str,
       headerName=nombre_cabecera,
       aggFunc="sum",
-      type=["numericColumn", "numberColumnFilter"],
+      type=["numericColumn"],
       valueFormatter=js_formatter,
       minWidth=ancho_col,
       width=ancho_col,
+      suppressMenu=True,  # Quita el icono de filtro interno para dar 100% de espacio al texto
   )
 
 for col in df_display.columns:
