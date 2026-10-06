@@ -1,64 +1,107 @@
-import streamlit as st
-import pandas as pd
-import gdown
+import io
 import os
+import gdown
+import pandas as pd
+import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder
 
+# Configuración inicial de la página
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
 
-# ATENCIÓN: Pega AQUÍ solo el código alfanumérico, sin diagonales ni "https"
 id_archivo = "1ngy9_QXNotPVESO_znJ01MrJb8CMlr1r"
 
 
 @st.cache_data(ttl=300)
 def cargar_datos():
-    url_drive = f"https://drive.google.com/uc?id={id_archivo}"
-    archivo_temporal = "gastos_erp.xlsx"
-    
-    # gdown fuerza la descarga saltándose las pantallas de advertencia de Google
-    gdown.download(url_drive, archivo_temporal, quiet=False)
-    
-    # Ahora pandas lee el archivo físico correctamente
-    return pd.read_excel(archivo_temporal)
+  url_drive = f"https://drive.google.com/uc?id={id_archivo}"
+  archivo_temporal = "gastos_erp.xlsx"
+  gdown.download(url_drive, archivo_temporal, quiet=True)
+  return pd.read_excel(archivo_temporal)
 
-# Intentar cargar los datos y mostrar un mensaje claro si falla
+
+# Cargar los datos desde Google Drive
 try:
-    df = cargar_datos()
+  df_raw = cargar_datos()
 except Exception as e:
-    st.error("Hubo un problema al conectar con Google Drive. Verifica que el enlace sea público.")
-    st.stop()
+  st.error(f"Error al descargar o leer los datos desde Google Drive: {e}")
+  st.stop()
 
+# 1. Filtro estricto: Solo 'Cobrado' y 'Pagado'
+df = df_raw.copy()
+if "EstadoCronograma" in df.columns:
+  df = df[df["EstadoCronograma"].isin(["Cobrado", "Pagado"])]
 
 st.title("📊 Control de Gastos por Proyecto")
 
-# Ajusta "Anio" al nombre real de la columna en tu Excel si es necesario
-if "Anio" in df.columns:
-    anios = sorted(df["Anio"].dropna().unique(), reverse=True)
-    anio_sel = st.selectbox("Selecciona el Año:", anios)
-    df_filtrado = df[df["Anio"] == anio_sel]
-else:
-    df_filtrado = df.copy()
+# 2. Barra lateral con filtros dinámicos
+st.sidebar.header("Filtros de Control")
 
-gb = GridOptionsBuilder.from_dataframe(df_filtrado)
-# Ajusta "Proyecto", "Subpartida" y "Monto" a los nombres reales de tus columnas
-gb.configure_column("Proyecto", rowGroup=True, hide=True)
-gb.configure_column("Subpartida")
-gb.configure_column("Monto", aggFunc="sum", type=["numericColumn"], precision=2)
+# Filtro de Empresa
+if "Empresa" in df.columns:
+  empresas = ["Todas"] + sorted(df["Empresa"].dropna().unique().tolist())
+  empresa_sel = st.sidebar.selectbox("Empresa:", empresas)
+  if empresa_sel != "Todas":
+    df = df[df["Empresa"] == empresa_sel]
 
+# Filtro de Proyecto
+if "ProyectoDimension1" in df.columns:
+  proyectos = ["Todos"] + sorted(
+      df["ProyectoDimension1"].dropna().unique().tolist()
+  )
+  proyecto_sel = st.sidebar.selectbox("Proyecto:", proyectos)
+  if proyecto_sel != "Todos":
+    df = df[df["ProyectoDimension1"] == proyecto_sel]
+
+# Filtro de Año
+if "PeriodoAno" in df.columns:
+  anios = sorted(df["PeriodoAno"].dropna().unique(), reverse=True)
+  anio_sel = st.sidebar.selectbox("Año:", anios)
+  df = df[df["PeriodoAno"] == anio_sel]
+
+# Filtro de Mes (dentro del año seleccionado)
+if "PeriodoMensual" in df.columns:
+  meses = ["Todos"] + sorted(df["PeriodoMensual"].dropna().unique().tolist())
+  mes_sel = st.sidebar.selectbox("Mes:", meses)
+  if mes_sel != "Todos":
+    df = df[df["PeriodoMensual"] == mes_sel]
+
+# 3. Configuración de la tabla con estructura de Árbol (Tree Grid)
+gb = GridOptionsBuilder.from_dataframe(df)
+
+# Niveles de agrupación jerárquica: DesPCG2 -> DesPCG3 -> DesPCG
+gb.configure_column("DesPCG2", rowGroup=True, hide=True)
+gb.configure_column("DesPCG3", rowGroup=True, hide=True)
+gb.configure_column("DesPCG", headerName="Detalle Final")
+
+# Suma monetaria
+gb.configure_column(
+    "MontoS",
+    headerName="Monto (S/)",
+    aggFunc="sum",
+    type=["numericColumn"],
+    precision=2,
+)
+
+# Ocultar el resto de las columnas para evitar saturar la pantalla
+columnas_visibles = ["DesPCG2", "DesPCG3", "DesPCG", "MontoS"]
+for col in df.columns:
+  if col not in columnas_visibles:
+    gb.configure_column(col, hide=True)
+
+# Configuración del árbol desplegable en una sola columna
 gb.configure_grid_options(
     autoGroupColumnDef={
-        "headerName": "Proyecto / Subpartida",
+        "headerName": "Grupo / Subpartida / Detalle",
         "cellRendererParams": {"suppressCount": False},
+        "minWidth": 400,
     },
-    groupDefaultExpanded=0,
+    groupDefaultExpanded=0,  # Todo colapsado por defecto
 )
 
 grid_options = gb.build()
 
+# 4. Renderizar tabla en pantalla
 AgGrid(
-    df_filtrado,
+    df,
     gridOptions=grid_options,
     enable_enterprise_modules=True,
-    height=450,
-    theme="balham",
-)
