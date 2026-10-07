@@ -300,6 +300,13 @@ def obtener_orden_mes(val):
 
     return anio * 100 + mes
 
+# --- DIAGNÓSTICO 2 (después de filtros del sidebar) ---
+_m2 = df["DesPCG"].astype(str).str.contains("ARAMBURU", case=False, na=False)
+st.sidebar.write("2) ARAMBURU tras filtros:", int(_m2.sum()))
+if _m2.any():
+    st.sidebar.write("   Años que quedan:", sorted(df[_m2]["PeriodoAno"].astype(str).unique().tolist()))
+    st.sidebar.write("   DesPCG2:", sorted(df[_m2]["DesPCG2"].astype(str).unique().tolist()))
+# --- FIN DIAGNÓSTICO 2 ---
 
 if (
     index_cols
