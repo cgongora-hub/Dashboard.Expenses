@@ -110,17 +110,6 @@ st.markdown(
 
 df = df_raw.copy()
 
-# --- DIAGNÓSTICO TEMPORAL (antes de filtros de sidebar) ---
-_m = df_raw["DesPCG"].astype(str).str.contains("ARAMBURU", case=False, na=False)
-st.sidebar.write("ARAMBURU en datos crudos:", int(_m.sum()))
-if _m.any():
-    st.sidebar.write("Años:", sorted(df_raw[_m]["PeriodoAno"].astype(str).unique().tolist()))
-    st.sidebar.write("Empresa:", sorted(df_raw[_m]["Empresa"].astype(str).unique().tolist()))
-    st.sidebar.write("Proyecto:", sorted(df_raw[_m]["ProyectoDimension1"].astype(str).unique().tolist()))
-    st.sidebar.write("DesPCG2:", sorted(df_raw[_m]["DesPCG2"].astype(str).unique().tolist()))
-    st.sidebar.write("Suma MontoS:", float(df_raw[_m]["MontoS"].sum()))
-# --- FIN DIAGNÓSTICO ---
-
 st.sidebar.header("Filtros de Control")
 
 
@@ -299,14 +288,6 @@ def obtener_orden_mes(val):
     anio = int(m_anio.group(1)) if m_anio else 0
 
     return anio * 100 + mes
-
-# --- DIAGNÓSTICO 2 (después de filtros del sidebar) ---
-_m2 = df["DesPCG"].astype(str).str.contains("ARAMBURU", case=False, na=False)
-st.sidebar.write("2) ARAMBURU tras filtros:", int(_m2.sum()))
-if _m2.any():
-    st.sidebar.write("   Años que quedan:", sorted(df[_m2]["PeriodoAno"].astype(str).unique().tolist()))
-    st.sidebar.write("   DesPCG2:", sorted(df[_m2]["DesPCG2"].astype(str).unique().tolist()))
-# --- FIN DIAGNÓSTICO 2 ---
 
 if (
     index_cols
