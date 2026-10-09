@@ -5,8 +5,55 @@ import gdown
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="Servicios por Cobrar", layout="wide")
+
+# =========================================================
+# ACTUALIZACIÓN DIARIA
+# =========================================================
+# Zona horaria de Lima (GMT-5)
+TZ_LIMA = ZoneInfo("America/Lima")
+
+
+def clave_del_dia():
+    """
+    Devuelve la fecha de hoy (Lima) como texto. Se usa como 'llave' del
+    caché: mientras sea el mismo día, el caché se reutiliza; cuando cambia
+    el día, se fuerza una descarga nueva del Excel/Sheets.
+    """
+    return datetime.now(TZ_LIMA).strftime("%Y-%m-%d")
+
+
+# --- Auto-recarga de la pestaña pasada la medianoche ---
+# Si alguien deja la página abierta de un día para otro, a las 00:01 (hora
+# de Lima) la pestaña se recarga sola UNA vez, para tomar los datos del
+# nuevo día. Durante el resto del día no recarga.
+st.markdown(
+    """
+    <script>
+    (function() {
+        function msHastaRecarga() {
+            // Hora actual en Lima (GMT-5)
+            const ahora = new Date();
+            const limaStr = ahora.toLocaleString("en-US", {timeZone: "America/Lima"});
+            const lima = new Date(limaStr);
+            // Próximo 00:01 de Lima
+            const objetivo = new Date(lima);
+            objetivo.setHours(0, 1, 0, 0);
+            if (lima >= objetivo) {
+                objetivo.setDate(objetivo.getDate() + 1);
+            }
+            return objetivo - lima;
+        }
+        const ms = msHastaRecarga();
+        setTimeout(function() { window.location.reload(); }, ms);
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- BLOQUE CSS ---
 st.markdown(
@@ -84,8 +131,8 @@ COLUMNAS_EXCEL = [
 ]
 
 
-@st.cache_data(ttl=600)
-def cargar_excel():
+@st.cache_data(ttl=86400)
+def cargar_excel(dia):  # 'dia' = clave_del_dia(); cambia el caché cada día
     url = f"https://drive.google.com/uc?id={ID_EXCEL}"
     tmp = "gastos_erp_d2.xlsx"
     gdown.download(url, tmp, quiet=True)
@@ -111,8 +158,8 @@ def cargar_excel():
     return df
 
 
-@st.cache_data(ttl=600)
-def cargar_sheet(nombre_pestana):
+@st.cache_data(ttl=86400)
+def cargar_sheet(nombre_pestana, dia):  # 'dia' = clave_del_dia()
     url = (
         f"https://docs.google.com/spreadsheets/d/{ID_SHEETS}"
         f"/gviz/tq?tqx=out:csv&sheet={nombre_pestana}"
@@ -126,10 +173,11 @@ def cargar_sheet(nombre_pestana):
 # CARGAS
 # =========================================================
 
+_dia = clave_del_dia()
 try:
-    df_excel = cargar_excel()
-    df_ppto = cargar_sheet(PESTANA_PRESUPUESTO)
-    df_listado = cargar_sheet(PESTANA_LISTADO)
+    df_excel = cargar_excel(_dia)
+    df_ppto = cargar_sheet(PESTANA_PRESUPUESTO, _dia)
+    df_listado = cargar_sheet(PESTANA_LISTADO, _dia)
 except Exception as e:
     st.error(f"Error cargando datos: {e}")
     st.stop()
