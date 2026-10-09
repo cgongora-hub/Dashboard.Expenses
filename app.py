@@ -6,8 +6,53 @@ import gdown
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 st.set_page_config(page_title="Dashboard de Gastos", layout="wide")
+
+# =========================================================
+# ACTUALIZACIÓN DIARIA
+# =========================================================
+# Zona horaria de Lima (GMT-5)
+TZ_LIMA = ZoneInfo("America/Lima")
+
+
+def clave_del_dia():
+    """
+    Devuelve la fecha de hoy (Lima) como texto. Se usa como 'llave' del
+    caché: mientras sea el mismo día, el caché se reutiliza; cuando cambia
+    el día, se fuerza una descarga nueva del Excel.
+    """
+    return datetime.now(TZ_LIMA).strftime("%Y-%m-%d")
+
+
+# --- Auto-recarga de la pestaña pasada la medianoche ---
+# Si alguien deja la página abierta de un día para otro, a las 00:01 (hora
+# de Lima) la pestaña se recarga sola UNA vez, para tomar los datos del
+# nuevo día.
+st.markdown(
+    """
+    <script>
+    (function() {
+        function msHastaRecarga() {
+            const ahora = new Date();
+            const limaStr = ahora.toLocaleString("en-US", {timeZone: "America/Lima"});
+            const lima = new Date(limaStr);
+            const objetivo = new Date(lima);
+            objetivo.setHours(0, 1, 0, 0);
+            if (lima >= objetivo) {
+                objetivo.setDate(objetivo.getDate() + 1);
+            }
+            return objetivo - lima;
+        }
+        const ms = msHastaRecarga();
+        setTimeout(function() { window.location.reload(); }, ms);
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --- BLOQUE CSS ---
 st.markdown(
@@ -48,8 +93,8 @@ COLUMNAS_NECESARIAS = [
 ]
 
 
-@st.cache_data(ttl=600)
-def cargar_datos():
+@st.cache_data(ttl=86400)
+def cargar_datos(dia):  # 'dia' = clave_del_dia(); cambia el caché cada día
     url_drive = f"https://drive.google.com/uc?id={id_archivo}"
     archivo_temporal = "gastos_erp.xlsx"
 
@@ -83,7 +128,7 @@ def cargar_datos():
 
 
 try:
-    df_raw = cargar_datos()
+    df_raw = cargar_datos(clave_del_dia())
 except Exception as e:
     st.error(f"Error al procesar los datos: {e}")
     st.stop()
@@ -288,6 +333,7 @@ def obtener_orden_mes(val):
     anio = int(m_anio.group(1)) if m_anio else 0
 
     return anio * 100 + mes
+
 
 if (
     index_cols
