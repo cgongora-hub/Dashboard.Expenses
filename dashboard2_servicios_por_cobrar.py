@@ -56,6 +56,20 @@ def normalizar_llave(serie):
     )
 
 
+def a_numero(serie):
+    """
+    Convierte texto con formato (comas de miles, S/, espacios, paréntesis
+    para negativos) a número. Pensado para los montos que vienen del Sheets
+    como texto, ej: "1,857,047.00" -> 1857047.0
+    """
+    s = serie.astype(str).str.strip()
+    # negativos entre paréntesis: (123) -> -123
+    s = s.str.replace(r"^\((.*)\)$", r"-\1", regex=True)
+    # quitar todo lo que no sea dígito, signo o punto decimal
+    s = s.str.replace(r"[^\d.\-]", "", regex=True)
+    return pd.to_numeric(s, errors="coerce").fillna(0)
+
+
 # =========================================================
 # CARGA EXCEL
 # =========================================================
@@ -151,15 +165,21 @@ df_ppto["DesPCG_key"] = normalizar_llave(df_ppto["DesPCG"])
 df_ppto["PROYECTO_norm"] = df_ppto["PROYECTO"].astype(str).str.strip()
 df_ppto["es_activo"] = df_ppto["PROYECTO_norm"].isin(proyectos_activos)
 
-# Presupuesto global numérico
-df_ppto[COL_PPTO_GLOBAL] = pd.to_numeric(
-    df_ppto[COL_PPTO_GLOBAL], errors="coerce"
-).fillna(0)
+# Presupuesto global numérico (limpia comas de miles, S/, etc.)
+if COL_PPTO_GLOBAL in df_ppto.columns:
+    df_ppto[COL_PPTO_GLOBAL] = a_numero(df_ppto[COL_PPTO_GLOBAL])
+else:
+    st.sidebar.error(f"No existe la columna '{COL_PPTO_GLOBAL}'")
+    df_ppto[COL_PPTO_GLOBAL] = 0
 
 # Columnas de años en el presupuesto (ya renombradas a 2022, 2023, ...)
-cols_anio_ppto = [c for c in df_ppto.columns if re.fullmatch(r"20\d{2}", str(c))]
-for c in cols_anio_ppto:
-    df_ppto[c] = pd.to_numeric(df_ppto[c], errors="coerce").fillna(0)
+# Se detecta cualquier encabezado que CONTENGA un año 20xx (tolera espacios, .0, etc.)
+mapa_cols_anio = {}  # año(int) -> nombre real de columna
+for c in df_ppto.columns:
+    m = re.search(r"(20\d{2})", str(c))
+    if m and str(c) not in [COL_PPTO_GLOBAL, "DesPCG", "PROYECTO"]:
+        mapa_cols_anio[int(m.group(1))] = c
+        df_ppto[c] = a_numero(df_ppto[c])
 
 # Solo partidas de proyectos activos
 df_ppto_activo = df_ppto[df_ppto["es_activo"]].copy()
@@ -220,10 +240,11 @@ jerarquia = jerarquia.merge(mapa_pcg3, on="DesPCG_key", how="left")
 if anio_sel == "Todos":
     df_ppto_activo["_programado"] = df_ppto_activo[COL_PPTO_GLOBAL]
 else:
-    col = str(anio_sel)
-    if col in df_ppto_activo.columns:
+    col = mapa_cols_anio.get(int(anio_sel))
+    if col is not None:
         df_ppto_activo["_programado"] = df_ppto_activo[col]
     else:
+        st.sidebar.warning(f"No hay columna de presupuesto para el año {anio_sel}")
         df_ppto_activo["_programado"] = 0
 
 programado = (
@@ -315,15 +336,38 @@ for c in num_cols_t1:
         minWidth=130,
     )
 
+# --- Fila de totales (fijada abajo, en negrita) ---
+fila_total = {"DesPCG3": "TOTAL GENERAL", "DesPCG": ""}
+for c in num_cols_t1:
+    fila_total[c] = float(tabla1[c].sum())
+
 gb1.configure_grid_options(
     suppressFieldDotNotation=True,
     autoGroupColumnDef={
         "headerName": "Subpartida / Detalle",
         "cellRendererParams": {"suppressCount": False},
         "minWidth": 380,
+        "valueGetter": JsCode(
+            """
+            function(params) {
+                if (params.node.rowPinned) { return 'TOTAL GENERAL'; }
+                return undefined;
+            }
+            """
+        ),
     },
     groupDefaultExpanded=0,
     suppressAggFuncInHeader=True,
+    pinnedBottomRowData=[fila_total],
+    getRowStyle=JsCode(
+        """
+        function(params) {
+            if (params.node.rowPinned) {
+                return { 'font-weight': '700', 'background-color': '#f5f5f5' };
+            }
+        }
+        """
+    ),
 )
 
 custom_css = {
