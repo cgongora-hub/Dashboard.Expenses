@@ -99,9 +99,9 @@ def cargar_excel():
 
     df.columns = df.columns.astype(str).str.strip()
 
-    if "DesPCG2" in df.columns:
-        df = df[df["DesPCG2"].astype(str).str.strip() == GRUPO_FIJO].copy()
-
+    # NO se filtra por DesPCG2 del Excel: las filas en estado "Pendiente"
+    # vienen sin DesPCG2/DesPCG3 (bug de O360) y se perderían.
+    # El grupo N y la jerarquía se toman del Sheets vía la llave DesPCG.
     df["MontoS"] = pd.to_numeric(df["MontoS"], errors="coerce").fillna(0)
     df["PeriodoAno"] = pd.to_numeric(df["PeriodoAno"], errors="coerce").astype("Int64")
     df["EstadoCronograma"] = df["EstadoCronograma"].astype(str).str.strip()
@@ -218,22 +218,20 @@ anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=idx_default)
 # CÁLCULO TABLA 1 — Resumen de Servicios por Cobrar
 # =========================================================
 
-# --- Mapa DesPCG_key -> (DesPCG3, DesPCG) para jerarquía, desde el presupuesto activo ---
-# (se usa el texto "bonito" original para mostrar)
+# --- Jerarquía DesPCG3 -> DesPCG desde el SHEETS (completo, no del Excel) ---
+# El Sheets tiene DesPCG2, DesPCG3 y DesPCG para cada partida N, y cubre
+# todas las partidas del grupo. Así evitamos el bug de O360 (pendientes
+# sin DesPCG2/DesPCG3 en el Excel).
+agg_jerarquia = {"DesPCG": ("DesPCG", "first")}
+if "DesPCG3" in df_ppto_activo.columns:
+    agg_jerarquia["DesPCG3"] = ("DesPCG3", "first")
+
 jerarquia = (
-    df_ppto_activo.groupby("DesPCG_key")
-    .agg(DesPCG=("DesPCG", "first"))
-    .reset_index()
+    df_ppto_activo.groupby("DesPCG_key").agg(**agg_jerarquia).reset_index()
 )
 
-# Traer DesPCG3 desde el Excel (que es donde vive ese nivel con los montos)
-mapa_pcg3 = (
-    df_excel.dropna(subset=["DesPCG3"])
-    .groupby("DesPCG_key")
-    .agg(DesPCG3=("DesPCG3", "first"))
-    .reset_index()
-)
-jerarquia = jerarquia.merge(mapa_pcg3, on="DesPCG_key", how="left")
+if "DesPCG3" not in jerarquia.columns:
+    jerarquia["DesPCG3"] = "(Sin DesPCG3)"
 
 
 # --- PROGRAMADO (del presupuesto, proyectos activos) ---
@@ -251,6 +249,42 @@ programado = (
     df_ppto_activo.groupby("DesPCG_key")["_programado"].sum().reset_index()
 )
 programado.columns = ["DesPCG_key", "Programado"]
+
+# --- DIAGNÓSTICO TEMPORAL ---
+with st.expander("🔎 DEBUG presupuesto y estados"):
+    st.write("Año seleccionado:", anio_sel)
+    st.write("Filas presupuesto total:", len(df_ppto))
+    st.write("Filas presupuesto ACTIVO:", len(df_ppto_activo))
+    st.write(
+        "Suma _programado (activos):",
+        float(df_ppto_activo["_programado"].sum()),
+    )
+    st.write(
+        "Muestra presupuesto activo (llave, proyecto, global, _programado):"
+    )
+    st.dataframe(
+        df_ppto_activo[
+            ["DesPCG_key", "PROYECTO_norm", COL_PPTO_GLOBAL, "_programado"]
+        ].head(20)
+    )
+    st.write(
+        "Estados únicos en EstadoCronograma (Excel):",
+        sorted(df_excel["EstadoCronograma"].unique().tolist()),
+    )
+    st.write("**Suma de MontoS por estado (partidas activas, año aplicado):**")
+    _tmp = df_excel[df_excel["DesPCG_key"].isin(df_ppto_activo["DesPCG_key"].unique())].copy()
+    if anio_sel != "Todos":
+        _tmp = _tmp[_tmp["PeriodoAno"] == anio_sel]
+    st.dataframe(
+        _tmp.groupby("EstadoCronograma")["MontoS"].sum().reset_index()
+    )
+    st.write(
+        "**Suma presupuesto GLOBAL (activos):**",
+        float(df_ppto_activo[COL_PPTO_GLOBAL].sum()),
+    )
+    st.write("Muestra columna global (primeros 10 valores crudos):")
+    st.write(df_ppto_activo[COL_PPTO_GLOBAL].head(10).tolist())
+# --- FIN DIAGNÓSTICO ---
 
 
 # --- Filtrar Excel a partidas de proyectos activos ---
