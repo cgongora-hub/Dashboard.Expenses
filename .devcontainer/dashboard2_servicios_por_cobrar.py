@@ -237,29 +237,6 @@ programado = (
 )
 programado.columns = ["DesPCG_key", "Programado"]
 
-
-# --- DIAGNÓSTICO TEMPORAL ---
-with st.expander("🔎 DEBUG presupuesto y estados"):
-    st.write("Año seleccionado:", anio_sel)
-    st.write("Filas presupuesto total:", len(df_ppto))
-    st.write("Filas presupuesto ACTIVO:", len(df_ppto_activo))
-    st.write("Suma _programado (activos):", float(df_ppto_activo["_programado"].sum()))
-    st.write("Estados únicos en EstadoCronograma (Excel):",
-             sorted(df_excel["EstadoCronograma"].unique().tolist()))
-    st.write("**Suma de MontoS por estado (partidas activas, año aplicado):**")
-    _tmp = df_excel[df_excel["DesPCG_key"].isin(df_ppto_activo["DesPCG_key"].unique())].copy()
-    if anio_sel != "Todos":
-        _tmp = _tmp[_tmp["PeriodoAno"] == anio_sel]
-    st.dataframe(_tmp.groupby("EstadoCronograma")["MontoS"].sum().reset_index())
-    st.write("**Suma presupuesto GLOBAL (activos):**",
-             float(df_ppto_activo[COL_PPTO_GLOBAL].sum()))
-    st.write("Muestra columna global (primeros 10 valores crudos):")
-    st.write(df_ppto_activo[COL_PPTO_GLOBAL].head(10).tolist())
-    st.write("¿Llaves activas en el Excel?",
-             f"{len(set(df_ppto_activo['DesPCG_key']) & set(df_excel['DesPCG_key']))} de {len(set(df_ppto_activo['DesPCG_key']))}")
-# --- FIN DIAGNÓSTICO ---
-
-
 # --- Filtrar Excel a partidas de proyectos activos ---
 llaves_activas = set(df_ppto_activo["DesPCG_key"].unique())
 df_exc = df_excel[df_excel["DesPCG_key"].isin(llaves_activas)].copy()
