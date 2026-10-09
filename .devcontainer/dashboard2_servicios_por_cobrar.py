@@ -453,14 +453,29 @@ for c in cols_proyecto:
 tabla2["DesPCG3"] = tabla2["DesPCG3"].fillna("(Sin DesPCG3)")
 tabla2["DesPCG"] = tabla2["DesPCG"].fillna(tabla2["DesPCG_key"])
 
-tabla2 = tabla2[["DesPCG3", "DesPCG"] + cols_proyecto]
-tabla2[cols_proyecto] = tabla2[cols_proyecto].round(2)
+# Columna Total (suma de todos los proyectos por fila), como primera numérica
+tabla2["Total"] = tabla2[cols_proyecto].sum(axis=1)
+
+tabla2 = tabla2[["DesPCG3", "DesPCG", "Total"] + cols_proyecto]
+tabla2[["Total"] + cols_proyecto] = tabla2[["Total"] + cols_proyecto].round(2)
 
 
 # --- Render Tabla 2 ---
 gb2 = GridOptionsBuilder.from_dataframe(tabla2)
 gb2.configure_column("DesPCG3", rowGroup=True, hide=True)
 gb2.configure_column("DesPCG", rowGroup=True, hide=True)
+
+# Columna Total (fijada a la izquierda, en negrita)
+gb2.configure_column(
+    "Total",
+    aggFunc="sum",
+    type=["numericColumn"],
+    valueFormatter=js_fmt,
+    width=160, minWidth=140,
+    suppressSizeToFit=True,
+    pinned="left",
+    cellStyle={"fontWeight": "700", "backgroundColor": "#fafafa"},
+)
 
 for c in cols_proyecto:
     gb2.configure_column(
@@ -474,6 +489,7 @@ for c in cols_proyecto:
 
 # Fila de totales
 fila_total_t2 = {"DesPCG3": "TOTAL GENERAL", "DesPCG": ""}
+fila_total_t2["Total"] = float(tabla2["Total"].sum())
 for c in cols_proyecto:
     fila_total_t2[c] = float(tabla2[c].sum())
 
