@@ -56,6 +56,13 @@ def normalizar_llave(serie):
     )
 
 
+def a_numero(serie):
+    s = serie.astype(str).str.strip()
+    s = s.str.replace(r"^\((.*)\)$", r"-\1", regex=True)
+    s = s.str.replace(r"[^\d.\-]", "", regex=True)
+    return pd.to_numeric(s, errors="coerce").fillna(0)
+
+
 # =========================================================
 # CARGA EXCEL
 # =========================================================
@@ -85,9 +92,8 @@ def cargar_excel():
 
     df.columns = df.columns.astype(str).str.strip()
 
-    if "DesPCG2" in df.columns:
-        df = df[df["DesPCG2"].astype(str).str.strip() == GRUPO_FIJO].copy()
-
+    # NO se filtra por DesPCG2 del Excel: las filas en estado "Pendiente"
+    # vienen sin DesPCG2/DesPCG3 (bug de O360) y se perderían.
     df["MontoS"] = pd.to_numeric(df["MontoS"], errors="coerce").fillna(0)
     df["PeriodoAno"] = pd.to_numeric(df["PeriodoAno"], errors="coerce").astype("Int64")
     df["EstadoCronograma"] = df["EstadoCronograma"].astype(str).str.strip()
@@ -151,17 +157,21 @@ df_ppto["DesPCG_key"] = normalizar_llave(df_ppto["DesPCG"])
 df_ppto["PROYECTO_norm"] = df_ppto["PROYECTO"].astype(str).str.strip()
 df_ppto["es_activo"] = df_ppto["PROYECTO_norm"].isin(proyectos_activos)
 
-# Presupuesto global numérico
-df_ppto[COL_PPTO_GLOBAL] = pd.to_numeric(
-    df_ppto[COL_PPTO_GLOBAL], errors="coerce"
-).fillna(0)
+# Presupuesto global numérico (limpia comas de miles, S/, etc.)
+if COL_PPTO_GLOBAL in df_ppto.columns:
+    df_ppto[COL_PPTO_GLOBAL] = a_numero(df_ppto[COL_PPTO_GLOBAL])
+else:
+    st.sidebar.error(f"No existe la columna '{COL_PPTO_GLOBAL}'")
+    df_ppto[COL_PPTO_GLOBAL] = 0
 
-# Columnas de años en el presupuesto (ya renombradas a 2022, 2023, ...)
-cols_anio_ppto = [c for c in df_ppto.columns if re.fullmatch(r"20\d{2}", str(c))]
-for c in cols_anio_ppto:
-    df_ppto[c] = pd.to_numeric(df_ppto[c], errors="coerce").fillna(0)
+# Columnas de años en el presupuesto
+mapa_cols_anio = {}
+for c in df_ppto.columns:
+    m = re.search(r"(20\d{2})", str(c))
+    if m and str(c) not in [COL_PPTO_GLOBAL, "DesPCG", "PROYECTO"]:
+        mapa_cols_anio[int(m.group(1))] = c
+        df_ppto[c] = a_numero(df_ppto[c])
 
-# Solo partidas de proyectos activos
 df_ppto_activo = df_ppto[df_ppto["es_activo"]].copy()
 
 
@@ -195,35 +205,31 @@ anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=idx_default)
 
 
 # =========================================================
-# CÁLCULO TABLA 1 — Resumen de Servicios por Cobrar
+# CÁLCULO TABLA 1
 # =========================================================
 
-# --- Mapa DesPCG_key -> (DesPCG3, DesPCG) para jerarquía, desde el presupuesto activo ---
-# (se usa el texto "bonito" original para mostrar)
+# --- Jerarquía DesPCG3 -> DesPCG desde el SHEETS (completo) ---
+agg_jerarquia = {"DesPCG": ("DesPCG", "first")}
+if "DesPCG3" in df_ppto_activo.columns:
+    agg_jerarquia["DesPCG3"] = ("DesPCG3", "first")
+
 jerarquia = (
-    df_ppto_activo.groupby("DesPCG_key")
-    .agg(DesPCG=("DesPCG", "first"))
-    .reset_index()
+    df_ppto_activo.groupby("DesPCG_key").agg(**agg_jerarquia).reset_index()
 )
 
-# Traer DesPCG3 desde el Excel (que es donde vive ese nivel con los montos)
-mapa_pcg3 = (
-    df_excel.dropna(subset=["DesPCG3"])
-    .groupby("DesPCG_key")
-    .agg(DesPCG3=("DesPCG3", "first"))
-    .reset_index()
-)
-jerarquia = jerarquia.merge(mapa_pcg3, on="DesPCG_key", how="left")
+if "DesPCG3" not in jerarquia.columns:
+    jerarquia["DesPCG3"] = "(Sin DesPCG3)"
 
 
-# --- PROGRAMADO (del presupuesto, proyectos activos) ---
+# --- PROGRAMADO ---
 if anio_sel == "Todos":
     df_ppto_activo["_programado"] = df_ppto_activo[COL_PPTO_GLOBAL]
 else:
-    col = str(anio_sel)
-    if col in df_ppto_activo.columns:
+    col = mapa_cols_anio.get(int(anio_sel))
+    if col is not None:
         df_ppto_activo["_programado"] = df_ppto_activo[col]
     else:
+        st.sidebar.warning(f"No hay columna de presupuesto para el año {anio_sel}")
         df_ppto_activo["_programado"] = 0
 
 programado = (
@@ -232,11 +238,32 @@ programado = (
 programado.columns = ["DesPCG_key", "Programado"]
 
 
+# --- DIAGNÓSTICO TEMPORAL ---
+with st.expander("🔎 DEBUG presupuesto y estados"):
+    st.write("Año seleccionado:", anio_sel)
+    st.write("Filas presupuesto total:", len(df_ppto))
+    st.write("Filas presupuesto ACTIVO:", len(df_ppto_activo))
+    st.write("Suma _programado (activos):", float(df_ppto_activo["_programado"].sum()))
+    st.write("Estados únicos en EstadoCronograma (Excel):",
+             sorted(df_excel["EstadoCronograma"].unique().tolist()))
+    st.write("**Suma de MontoS por estado (partidas activas, año aplicado):**")
+    _tmp = df_excel[df_excel["DesPCG_key"].isin(df_ppto_activo["DesPCG_key"].unique())].copy()
+    if anio_sel != "Todos":
+        _tmp = _tmp[_tmp["PeriodoAno"] == anio_sel]
+    st.dataframe(_tmp.groupby("EstadoCronograma")["MontoS"].sum().reset_index())
+    st.write("**Suma presupuesto GLOBAL (activos):**",
+             float(df_ppto_activo[COL_PPTO_GLOBAL].sum()))
+    st.write("Muestra columna global (primeros 10 valores crudos):")
+    st.write(df_ppto_activo[COL_PPTO_GLOBAL].head(10).tolist())
+    st.write("¿Llaves activas en el Excel?",
+             f"{len(set(df_ppto_activo['DesPCG_key']) & set(df_excel['DesPCG_key']))} de {len(set(df_ppto_activo['DesPCG_key']))}")
+# --- FIN DIAGNÓSTICO ---
+
+
 # --- Filtrar Excel a partidas de proyectos activos ---
 llaves_activas = set(df_ppto_activo["DesPCG_key"].unique())
 df_exc = df_excel[df_excel["DesPCG_key"].isin(llaves_activas)].copy()
 
-# Filtro de año en el Excel
 if anio_sel != "Todos":
     df_exc = df_exc[df_exc["PeriodoAno"] == anio_sel]
 
@@ -256,7 +283,7 @@ cobrado = (
 cobrado.columns = ["DesPCG_key", "Cobrado"]
 
 
-# --- Unir todo sobre la jerarquía ---
+# --- Unir todo ---
 tabla1 = jerarquia.merge(programado, on="DesPCG_key", how="outer")
 tabla1 = tabla1.merge(facturado, on="DesPCG_key", how="outer")
 tabla1 = tabla1.merge(cobrado, on="DesPCG_key", how="outer")
@@ -264,18 +291,14 @@ tabla1 = tabla1.merge(cobrado, on="DesPCG_key", how="outer")
 for c in ["Programado", "Facturado", "Cobrado"]:
     tabla1[c] = pd.to_numeric(tabla1[c], errors="coerce").fillna(0)
 
-# --- Columnas derivadas ---
 tabla1["Por Cobrar"] = tabla1["Facturado"] - tabla1["Cobrado"]
-# Por Facturar = Programado - Facturado, pero 0 si Programado <= 0
 tabla1["Por Facturar"] = (tabla1["Programado"] - tabla1["Facturado"]).where(
     tabla1["Programado"] > 0, 0
 )
 
-# Rellenar textos faltantes de jerarquía
 tabla1["DesPCG3"] = tabla1["DesPCG3"].fillna("(Sin DesPCG3)")
 tabla1["DesPCG"] = tabla1["DesPCG"].fillna(tabla1["DesPCG_key"])
 
-# Orden de columnas finales
 tabla1 = tabla1[
     ["DesPCG3", "DesPCG", "Programado", "Facturado", "Cobrado", "Por Cobrar", "Por Facturar"]
 ]
@@ -291,7 +314,6 @@ st.subheader("Resumen de Servicios por Cobrar")
 num_cols_t1 = ["Programado", "Facturado", "Cobrado", "Por Cobrar", "Por Facturar"]
 
 gb1 = GridOptionsBuilder.from_dataframe(tabla1)
-
 gb1.configure_column("DesPCG3", rowGroup=True, hide=True)
 gb1.configure_column("DesPCG", rowGroup=True, hide=True)
 
@@ -308,12 +330,13 @@ js_fmt = JsCode(
 
 for c in num_cols_t1:
     gb1.configure_column(
-        c,
-        aggFunc="sum",
-        type=["numericColumn"],
-        valueFormatter=js_fmt,
-        minWidth=130,
+        c, aggFunc="sum", type=["numericColumn"],
+        valueFormatter=js_fmt, minWidth=130,
     )
+
+fila_total = {"DesPCG3": "TOTAL GENERAL", "DesPCG": ""}
+for c in num_cols_t1:
+    fila_total[c] = float(tabla1[c].sum())
 
 gb1.configure_grid_options(
     suppressFieldDotNotation=True,
@@ -321,9 +344,27 @@ gb1.configure_grid_options(
         "headerName": "Subpartida / Detalle",
         "cellRendererParams": {"suppressCount": False},
         "minWidth": 380,
+        "valueGetter": JsCode(
+            """
+            function(params) {
+                if (params.node.rowPinned) { return 'TOTAL GENERAL'; }
+                return undefined;
+            }
+            """
+        ),
     },
     groupDefaultExpanded=0,
     suppressAggFuncInHeader=True,
+    pinnedBottomRowData=[fila_total],
+    getRowStyle=JsCode(
+        """
+        function(params) {
+            if (params.node.rowPinned) {
+                return { 'font-weight': '700', 'background-color': '#f5f5f5' };
+            }
+        }
+        """
+    ),
 )
 
 custom_css = {
