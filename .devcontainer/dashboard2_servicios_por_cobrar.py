@@ -330,7 +330,7 @@ for c in num_cols_t1:
         aggFunc="sum",
         type=["numericColumn"],
         valueFormatter=js_fmt,
-        width=120, minWidth=110, maxWidth=150,
+        width=156, minWidth=145, maxWidth=195,
         suppressSizeToFit=True,  # no se estira para llenar el espacio
     )
 
