@@ -385,3 +385,134 @@ AgGrid(
     theme="balham",
     custom_css=custom_css,
 )
+
+
+# =========================================================
+# TABLA 2 — Servicios por cobrar por proyecto
+# =========================================================
+
+st.markdown("<br>", unsafe_allow_html=True)
+st.subheader("Servicios por cobrar por proyecto")
+
+# Usa el MISMO filtro de año del sidebar (compartido con la Tabla 1)
+anio_sel_t2 = anio_sel
+
+# --- Mapeo DesPCG_key -> PROYECTO (desde el Sheets, solo activos) ---
+mapa_proyecto = (
+    df_ppto_activo.groupby("DesPCG_key")
+    .agg(PROYECTO=("PROYECTO_norm", "first"))
+    .reset_index()
+)
+
+# --- Jerarquía (misma que Tabla 1) ---
+jerarquia_t2 = jerarquia.copy()
+
+# --- Excel: solo partidas activas, estado Pendiente, año propio ---
+df_exc_t2 = df_excel[df_excel["DesPCG_key"].isin(llaves_activas)].copy()
+if anio_sel_t2 != "Todos":
+    df_exc_t2 = df_exc_t2[df_exc_t2["PeriodoAno"] == anio_sel_t2]
+
+df_exc_t2 = df_exc_t2[df_exc_t2["EstadoCronograma"] == "Pendiente"].copy()
+
+# --- Asignar a cada fila del Excel su proyecto (vía DesPCG_key) ---
+df_exc_t2 = df_exc_t2.merge(mapa_proyecto, on="DesPCG_key", how="left")
+
+# --- Pivote: filas = DesPCG_key, columnas = proyecto, valores = suma MontoS ---
+if not df_exc_t2.empty:
+    pivote = pd.pivot_table(
+        df_exc_t2,
+        index="DesPCG_key",
+        columns="PROYECTO",
+        values="MontoS",
+        aggfunc="sum",
+        fill_value=0,
+    ).reset_index()
+    pivote.columns.name = None
+else:
+    pivote = pd.DataFrame({"DesPCG_key": []})
+
+# --- Unir jerarquía (DesPCG3, DesPCG) con el pivote ---
+tabla2 = jerarquia_t2.merge(pivote, on="DesPCG_key", how="left")
+
+# Columnas de proyectos activos (las que existen en el pivote)
+cols_proyecto = [
+    c for c in tabla2.columns
+    if c not in ["DesPCG_key", "DesPCG3", "DesPCG"]
+]
+
+# Asegurar que TODOS los proyectos activos tengan columna (aunque estén en 0)
+for p in sorted(proyectos_activos):
+    if p not in tabla2.columns:
+        tabla2[p] = 0
+cols_proyecto = sorted([p for p in proyectos_activos if p in tabla2.columns])
+
+# Rellenar y redondear
+for c in cols_proyecto:
+    tabla2[c] = pd.to_numeric(tabla2[c], errors="coerce").fillna(0)
+
+tabla2["DesPCG3"] = tabla2["DesPCG3"].fillna("(Sin DesPCG3)")
+tabla2["DesPCG"] = tabla2["DesPCG"].fillna(tabla2["DesPCG_key"])
+
+tabla2 = tabla2[["DesPCG3", "DesPCG"] + cols_proyecto]
+tabla2[cols_proyecto] = tabla2[cols_proyecto].round(2)
+
+
+# --- Render Tabla 2 ---
+gb2 = GridOptionsBuilder.from_dataframe(tabla2)
+gb2.configure_column("DesPCG3", rowGroup=True, hide=True)
+gb2.configure_column("DesPCG", rowGroup=True, hide=True)
+
+for c in cols_proyecto:
+    gb2.configure_column(
+        c,
+        aggFunc="sum",
+        type=["numericColumn"],
+        valueFormatter=js_fmt,
+        width=150, minWidth=130,
+        suppressSizeToFit=True,
+    )
+
+# Fila de totales
+fila_total_t2 = {"DesPCG3": "TOTAL GENERAL", "DesPCG": ""}
+for c in cols_proyecto:
+    fila_total_t2[c] = float(tabla2[c].sum())
+
+gb2.configure_grid_options(
+    suppressFieldDotNotation=True,
+    autoGroupColumnDef={
+        "headerName": "Subpartida / Detalle",
+        "cellRendererParams": {"suppressCount": False},
+        "minWidth": 360,
+        "pinned": "left",
+        "valueGetter": JsCode(
+            """
+            function(params) {
+                if (params.node.rowPinned) { return 'TOTAL GENERAL'; }
+                return undefined;
+            }
+            """
+        ),
+    },
+    groupDefaultExpanded=0,
+    suppressAggFuncInHeader=True,
+    pinnedBottomRowData=[fila_total_t2],
+    getRowStyle=JsCode(
+        """
+        function(params) {
+            if (params.node.rowPinned) {
+                return { 'font-weight': '700', 'background-color': '#f5f5f5' };
+            }
+        }
+        """
+    ),
+)
+
+AgGrid(
+    tabla2,
+    gridOptions=gb2.build(),
+    enable_enterprise_modules=True,
+    allow_unsafe_jscode=True,
+    height=500,
+    theme="balham",
+    custom_css=custom_css,
+)
