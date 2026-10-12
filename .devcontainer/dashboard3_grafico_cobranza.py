@@ -212,7 +212,7 @@ st.markdown(
             <rect x="15" y="14" width="9" height="24" rx="1.5" fill="#ffcc00"/>
             <rect x="28" y="4"  width="9" height="34" rx="1.5" fill="#595959"/>
         </svg>
-        <span style="font-size:38px;font-weight:700;color:#595959;">Avance de Cobranza</span>
+        <span style="font-size:38px;font-weight:700;color:#595959;">Avance de Cobranza de Servicios</span>
     </div>
     ''',
     unsafe_allow_html=True,
@@ -320,20 +320,45 @@ df_g = df_g[df_g[["Cobrado", "Por Cobrar", "Por Facturar"]].sum(axis=1) > 0]
 if df_g.empty:
     st.info("No hay datos para graficar con los filtros seleccionados.")
 else:
+    # --- Formato abreviado: 5.4M -> "S/ 5.4 M", 34300 -> "S/ 34.3 K" ---
+    def fmt_corto(v):
+        v = float(v)
+        a = abs(v)
+        if a >= 1_000_000:
+            return f"S/ {v/1_000_000:.1f} M"
+        if a >= 1_000:
+            return f"S/ {v/1_000:.1f} K"
+        if a > 0:
+            return f"S/ {v:,.0f}"
+        return ""
+
+    # Umbral: no poner etiqueta si el segmento es < 5% de la barra más larga
+    max_total = float(df_g[["Cobrado", "Por Cobrar", "Por Facturar"]].sum(axis=1).max())
+    umbral = max_total * 0.05 if max_total > 0 else 0
+
+    def etiquetas(col):
+        return [fmt_corto(v) if v >= umbral else "" for v in df_g[col]]
+
     fig = go.Figure()
     fig.add_bar(
         y=df_g.index, x=df_g["Cobrado"], name="Cobrado",
         orientation="h", marker_color="#595959",
+        text=etiquetas("Cobrado"), textposition="inside",
+        insidetextanchor="middle", textfont=dict(color="white", size=12),
         hovertemplate="Cobrado: S/ %{x:,.2f}<extra></extra>",
     )
     fig.add_bar(
         y=df_g.index, x=df_g["Por Cobrar"], name="Por Cobrar",
         orientation="h", marker_color="#ffcc00",
+        text=etiquetas("Por Cobrar"), textposition="inside",
+        insidetextanchor="middle", textfont=dict(color="#595959", size=12),
         hovertemplate="Por Cobrar: S/ %{x:,.2f}<extra></extra>",
     )
     fig.add_bar(
         y=df_g.index, x=df_g["Por Facturar"], name="Por Facturar",
         orientation="h", marker_color="#bdbdbd",
+        text=etiquetas("Por Facturar"), textposition="inside",
+        insidetextanchor="middle", textfont=dict(color="#595959", size=12),
         hovertemplate="Por Facturar: S/ %{x:,.2f}<extra></extra>",
     )
     fig.update_layout(
@@ -345,6 +370,7 @@ else:
         xaxis=dict(title="", tickformat=",.0f", gridcolor="#eee"),
         yaxis=dict(title=""),
         plot_bgcolor="white",
+        uniformtext=dict(mode="hide", minsize=10),
     )
     st.plotly_chart(fig, use_container_width=True)
 
