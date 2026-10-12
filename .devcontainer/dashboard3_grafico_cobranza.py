@@ -263,13 +263,15 @@ if anio_sel == "Todos":
 else:
     col = mapa_cols_anio.get(int(anio_sel))
     pp["_prog"] = pp[col] if col is not None else 0
-pp = pp.merge(mapa_part[["DesPCG_key", "DesPCG3"]], on="DesPCG_key", how="left")
+# pp (presupuesto) ya trae DesPCG3 del Sheets, no hace falta merge.
+if "DesPCG3" not in pp.columns:
+    pp["DesPCG3"] = "(Sin tipo)"
 if emp_sel != "Todas" and "EMPRESA" in pp.columns:
     pp = pp[pp["EMPRESA"].astype(str).str.strip() == emp_sel]
 if proy_sel != "Todos":
     pp = pp[pp["PROYECTO_norm"] == proy_sel]
 if tipo_sel != "Todos":
-    pp = pp[pp["DesPCG3"] == tipo_sel]
+    pp = pp[pp["DesPCG3"].astype(str).str.strip() == tipo_sel]
 
 # Columna de agrupación
 col_grupo = "PROYECTO" if dim == "Proyecto" else "DesPCG3"
