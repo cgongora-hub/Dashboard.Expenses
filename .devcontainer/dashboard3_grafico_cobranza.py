@@ -87,6 +87,21 @@ def a_numero(serie):
     return pd.to_numeric(s, errors="coerce").fillna(0)
 
 
+def norm_emp(serie):
+    """Normaliza nombres de empresa para comparar entre Excel y Sheets:
+    mayúsculas, sin espacios dobles, sin puntos (ignora diferencias como
+    'S.A.' vs 'SA' o espacios extra)."""
+    return (
+        serie.astype(str).str.upper().str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.replace(".", "", regex=False)
+    )
+
+
+def norm_emp_scalar(x):
+    return re.sub(r"\s+", " ", str(x).upper().strip()).replace(".", "")
+
+
 COLUMNAS_EXCEL = [
     "PeriodoAno", "EstadoCronograma", "Empresa",
     "DesPCG2", "DesPCG3", "DesPCG", "MontoS",
@@ -250,7 +265,7 @@ df_exc = df_exc.drop(columns=["DesPCG2", "DesPCG3"], errors="ignore").merge(
 
 # Aplicar filtros de empresa, proyecto y tipo
 if emp_sel != "Todas" and "Empresa" in df_exc.columns:
-    df_exc = df_exc[df_exc["Empresa"] == emp_sel]
+    df_exc = df_exc[norm_emp(df_exc["Empresa"]) == norm_emp_scalar(emp_sel)]
 if proy_sel != "Todos":
     df_exc = df_exc[df_exc["PROYECTO"] == proy_sel]
 if tipo_sel != "Todos":
@@ -267,7 +282,7 @@ else:
 if "DesPCG3" not in pp.columns:
     pp["DesPCG3"] = "(Sin tipo)"
 if emp_sel != "Todas" and "EMPRESA" in pp.columns:
-    pp = pp[pp["EMPRESA"].astype(str).str.strip() == emp_sel]
+    pp = pp[norm_emp(pp["EMPRESA"]) == norm_emp_scalar(emp_sel)]
 if proy_sel != "Todos":
     pp = pp[pp["PROYECTO_norm"] == proy_sel]
 if tipo_sel != "Todos":
