@@ -368,23 +368,29 @@ for col in df_display.columns:
     if col not in index_cols_str and col not in num_cols_str:
         gb.configure_column(col, hide=True)
 
-# Comparador: el grupo "N. INGRESOS DE EMPRESAS DE SERVICIOS" siempre primero
-# (solo en el nivel superior, DesPCG2). El resto queda en orden normal.
-comparador_grupo = JsCode(
+# Orden de grupos: "N. INGRESOS DE EMPRESAS DE SERVICIOS" siempre primero
+# (solo en el nivel superior). El resto, alfabético.
+orden_grupos = JsCode(
     """
-    function(a, b, nodeA, nodeB, isDescending) {
-        var na = (a == null ? "" : a.toString());
-        var nb = (b == null ? "" : b.toString());
-        if (nodeA && nodeA.level === 0) {
-            var isNa = na.indexOf("N. INGRESOS") === 0;
-            var isNb = nb.indexOf("N. INGRESOS") === 0;
+    function(params) {
+        var a = params.nodeA, b = params.nodeB;
+        var ka = (a && a.key != null ? a.key.toString() : "");
+        var kb = (b && b.key != null ? b.key.toString() : "");
+        if (a && b && a.level === 0 && b.level === 0) {
+            var isNa = ka.indexOf("N. INGRESOS") === 0;
+            var isNb = kb.indexOf("N. INGRESOS") === 0;
             if (isNa && !isNb) return -1;
             if (!isNa && isNb) return 1;
         }
-        return na.localeCompare(nb);
+        return ka.localeCompare(kb);
     }
     """
 )
+
+# --- Fila de TOTAL GENERAL (fijada abajo, en negrita) ---
+fila_total = {}
+for c in num_cols_str:
+    fila_total[c] = float(pd.to_numeric(df_display[c], errors="coerce").fillna(0).sum())
 
 gb.configure_grid_options(
     autoGroupColumnDef={
@@ -393,10 +399,28 @@ gb.configure_grid_options(
         "minWidth": 400,
         "width": 450,
         "pinned": "left",
-        "comparator": comparador_grupo,
+        "valueGetter": JsCode(
+            """
+            function(params) {
+                if (params.node.rowPinned) { return 'TOTAL GENERAL'; }
+                return undefined;
+            }
+            """
+        ),
     },
     groupDefaultExpanded=0,
     suppressAggFuncInHeader=True,
+    initialGroupOrderComparator=orden_grupos,
+    pinnedBottomRowData=[fila_total],
+    getRowStyle=JsCode(
+        """
+        function(params) {
+            if (params.node.rowPinned) {
+                return { 'font-weight': '700', 'background-color': '#f5f5f5' };
+            }
+        }
+        """
+    ),
 )
 
 grid_options = gb.build()
