@@ -84,9 +84,14 @@ ID_SHEETS = "1xbZZ7TIBdAb9-55ma8EBHgKNv7doTmqmckWE95wHVqs"
 
 PESTANA_PRESUPUESTO = "PresupuestoFeesIngresosProyectos"
 PESTANA_LISTADO = "ListadoProyectos"
+PESTANA_EMPRESAS = "ListadoEmpresasServicios"
 
 GRUPO_FIJO = "N. INGRESOS DE EMPRESAS DE SERVICIOS"
 COL_PPTO_GLOBAL = "Presupuesto.Global.inc.IGV"
+
+
+def norm_emp_scalar(x):
+    return re.sub(r"\s+", " ", str(x).upper().strip()).replace(".", "")
 
 
 # =========================================================
@@ -178,9 +183,39 @@ try:
     df_excel = cargar_excel(_dia)
     df_ppto = cargar_sheet(PESTANA_PRESUPUESTO, _dia)
     df_listado = cargar_sheet(PESTANA_LISTADO, _dia)
+    df_emp = cargar_sheet(PESTANA_EMPRESAS, _dia)
 except Exception as e:
     st.error(f"Error cargando datos: {e}")
     st.stop()
+
+
+# =========================================================
+# EMPRESAS DE SERVICIO ACTIVAS (desde el Sheets)
+# =========================================================
+# Pestaña ListadoEmpresasServicios: columna "Empresa" y "Dashboard_Empresa".
+# Activas = las que tienen "Activa" en Dashboard_Empresa.
+_col_emp = "Empresa" if "Empresa" in df_emp.columns else None
+_col_dash = None
+for c in ["Dashboard_Empresa", "Dashboard Empresa", "DashboardEmpresa"]:
+    if c in df_emp.columns:
+        _col_dash = c
+        break
+
+if _col_emp is None or _col_dash is None:
+    st.error(
+        "No se encontraron 'Empresa' y 'Dashboard_Empresa' en "
+        f"{PESTANA_EMPRESAS}. Columnas: {list(df_emp.columns)}"
+    )
+    st.stop()
+
+empresas_activas = (
+    df_emp.loc[
+        df_emp[_col_dash].astype(str).str.strip().str.lower() == "activa",
+        _col_emp,
+    ].astype(str).str.strip().unique().tolist()
+)
+empresas_activas = [e for e in empresas_activas if e and e.lower() != "nan"]
+activos_emp_norm = set(norm_emp_scalar(e) for e in empresas_activas)
 
 
 # =========================================================
@@ -213,6 +248,13 @@ df_ppto["DesPCG_key"] = normalizar_llave(df_ppto["DesPCG"])
 df_ppto["PROYECTO_norm"] = df_ppto["PROYECTO"].astype(str).str.strip()
 df_ppto["es_activo"] = df_ppto["PROYECTO_norm"].isin(proyectos_activos)
 
+# Empresa de servicio (normalizada) y si está activa
+if "EMPRESA" in df_ppto.columns:
+    df_ppto["EMPRESA_norm"] = df_ppto["EMPRESA"].astype(str).map(norm_emp_scalar)
+else:
+    df_ppto["EMPRESA_norm"] = ""
+df_ppto["emp_activa"] = df_ppto["EMPRESA_norm"].isin(activos_emp_norm)
+
 # Presupuesto global numérico (limpia comas de miles, S/, etc.)
 if COL_PPTO_GLOBAL in df_ppto.columns:
     df_ppto[COL_PPTO_GLOBAL] = a_numero(df_ppto[COL_PPTO_GLOBAL])
@@ -229,8 +271,8 @@ for c in df_ppto.columns:
         mapa_cols_anio[int(m.group(1))] = c
         df_ppto[c] = a_numero(df_ppto[c])
 
-# Solo partidas de proyectos activos
-df_ppto_activo = df_ppto[df_ppto["es_activo"]].copy()
+# Solo partidas de proyectos activos Y de empresas de servicio activas
+df_ppto_activo = df_ppto[df_ppto["es_activo"] & df_ppto["emp_activa"]].copy()
 
 
 # =========================================================
@@ -260,6 +302,15 @@ opciones_ano = ["Todos"] + anios_excel
 idx_default = opciones_ano.index(anio_actual) if anio_actual in opciones_ano else 0
 
 anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=idx_default)
+
+# --- Filtro de Empresa (solo empresas de servicio activas) ---
+opciones_emp = ["Todas"] + sorted(empresas_activas)
+empresa_sel = st.sidebar.selectbox("Empresa:", opciones_emp, index=0)
+
+if empresa_sel != "Todas":
+    df_ppto_activo = df_ppto_activo[
+        df_ppto_activo["EMPRESA_norm"] == norm_emp_scalar(empresa_sel)
+    ]
 
 
 # =========================================================
@@ -488,11 +539,12 @@ cols_proyecto = [
     if c not in ["DesPCG_key", "DesPCG3", "DesPCG"]
 ]
 
-# Asegurar que TODOS los proyectos activos tengan columna (aunque estén en 0)
-for p in sorted(proyectos_activos):
+# Proyectos relevantes = los del presupuesto ya filtrado (empresa/proyecto activos)
+proyectos_relevantes = sorted(df_ppto_activo["PROYECTO_norm"].dropna().unique().tolist())
+for p in proyectos_relevantes:
     if p not in tabla2.columns:
         tabla2[p] = 0
-cols_proyecto = sorted([p for p in proyectos_activos if p in tabla2.columns])
+cols_proyecto = sorted([p for p in proyectos_relevantes if p in tabla2.columns])
 
 # Rellenar y redondear
 for c in cols_proyecto:
