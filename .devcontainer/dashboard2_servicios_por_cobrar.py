@@ -296,12 +296,10 @@ st.markdown(
 st.sidebar.header("Filtros de Control")
 
 anios_excel = sorted(df_excel["PeriodoAno"].dropna().unique().tolist())
-anio_actual = 2026 if 2026 in anios_excel else (max(anios_excel) if anios_excel else None)
 
 opciones_ano = ["Todos"] + anios_excel
-idx_default = opciones_ano.index(anio_actual) if anio_actual in opciones_ano else 0
 
-anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=idx_default)
+anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=0)  # por defecto "Todos"
 
 # --- Filtro de Empresa (solo empresas de servicio activas) ---
 opciones_emp = ["Todas"] + sorted(empresas_activas)
