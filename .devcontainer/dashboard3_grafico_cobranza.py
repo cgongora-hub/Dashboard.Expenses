@@ -225,9 +225,12 @@ anios_excel = sorted(df_excel["PeriodoAno"].dropna().unique().tolist())
 opciones_ano = ["Todos"] + anios_excel
 anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=0)
 
-# --- Empresa de servicio ---
-if "Empresa" in df_excel.columns:
-    empresas = sorted(df_excel["Empresa"].dropna().unique().tolist())
+# --- Empresa de servicio (solo las del Sheets de presupuesto) ---
+if "EMPRESA" in df_ppto_activo.columns:
+    empresas = sorted(
+        df_ppto_activo["EMPRESA"].dropna().astype(str).str.strip()
+        .replace("", pd.NA).dropna().unique().tolist()
+    )
     opciones_emp = ["Todas"] + empresas
     emp_sel = st.sidebar.selectbox("Empresa:", opciones_emp, index=0)
 else:
