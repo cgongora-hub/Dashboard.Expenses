@@ -88,7 +88,8 @@ def a_numero(serie):
 
 
 COLUMNAS_EXCEL = [
-    "PeriodoAno", "EstadoCronograma", "DesPCG2", "DesPCG3", "DesPCG", "MontoS",
+    "PeriodoAno", "EstadoCronograma", "Empresa",
+    "DesPCG2", "DesPCG3", "DesPCG", "MontoS",
 ]
 
 
@@ -107,6 +108,8 @@ def cargar_excel(dia):
     df["MontoS"] = pd.to_numeric(df["MontoS"], errors="coerce").fillna(0)
     df["PeriodoAno"] = pd.to_numeric(df["PeriodoAno"], errors="coerce").astype("Int64")
     df["EstadoCronograma"] = df["EstadoCronograma"].astype(str).str.strip()
+    if "Empresa" in df.columns:
+        df["Empresa"] = df["Empresa"].astype(str).str.strip()
     df["DesPCG_key"] = normalizar_llave(df["DesPCG"])
     gc.collect()
     return df
@@ -202,12 +205,18 @@ st.markdown(
 
 st.sidebar.header("Filtros de Control")
 
-# --- Año ---
+# --- Año (por defecto "Todos") ---
 anios_excel = sorted(df_excel["PeriodoAno"].dropna().unique().tolist())
-anio_actual = 2026 if 2026 in anios_excel else (max(anios_excel) if anios_excel else None)
 opciones_ano = ["Todos"] + anios_excel
-idx_ano = opciones_ano.index(anio_actual) if anio_actual in opciones_ano else 0
-anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=idx_ano)
+anio_sel = st.sidebar.selectbox("Año:", opciones_ano, index=0)
+
+# --- Empresa de servicio ---
+if "Empresa" in df_excel.columns:
+    empresas = sorted(df_excel["Empresa"].dropna().unique().tolist())
+    opciones_emp = ["Todas"] + empresas
+    emp_sel = st.sidebar.selectbox("Empresa:", opciones_emp, index=0)
+else:
+    emp_sel = "Todas"
 
 # --- Proyecto ---
 opciones_proy = ["Todos"] + sorted(proyectos_activos)
@@ -232,10 +241,16 @@ df_exc = df_excel[df_excel["DesPCG_key"].isin(llaves_activas)].copy()
 if anio_sel != "Todos":
     df_exc = df_exc[df_exc["PeriodoAno"] == anio_sel]
 
-# Añadir PROYECTO y DesPCG3 a cada fila
-df_exc = df_exc.merge(mapa_part, on="DesPCG_key", how="left")
+# Añadir PROYECTO y DesPCG3 a cada fila.
+# Se quitan DesPCG2/DesPCG3 del Excel (vienen incompletas por el bug de O360)
+# para que al cruzar quede solo la DesPCG3 del Sheets, sin colisión de nombres.
+df_exc = df_exc.drop(columns=["DesPCG2", "DesPCG3"], errors="ignore").merge(
+    mapa_part, on="DesPCG_key", how="left"
+)
 
-# Aplicar filtros de proyecto y tipo
+# Aplicar filtros de empresa, proyecto y tipo
+if emp_sel != "Todas" and "Empresa" in df_exc.columns:
+    df_exc = df_exc[df_exc["Empresa"] == emp_sel]
 if proy_sel != "Todos":
     df_exc = df_exc[df_exc["PROYECTO"] == proy_sel]
 if tipo_sel != "Todos":
@@ -249,6 +264,8 @@ else:
     col = mapa_cols_anio.get(int(anio_sel))
     pp["_prog"] = pp[col] if col is not None else 0
 pp = pp.merge(mapa_part[["DesPCG_key", "DesPCG3"]], on="DesPCG_key", how="left")
+if emp_sel != "Todas" and "EMPRESA" in pp.columns:
+    pp = pp[pp["EMPRESA"].astype(str).str.strip() == emp_sel]
 if proy_sel != "Todos":
     pp = pp[pp["PROYECTO_norm"] == proy_sel]
 if tipo_sel != "Todos":
@@ -286,7 +303,7 @@ else:
     fig = go.Figure()
     fig.add_bar(
         y=df_g.index, x=df_g["Cobrado"], name="Cobrado",
-        orientation="h", marker_color="#2e7d32",
+        orientation="h", marker_color="#595959",
         hovertemplate="Cobrado: S/ %{x:,.2f}<extra></extra>",
     )
     fig.add_bar(
